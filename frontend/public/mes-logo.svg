@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3e889d;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#243e4b;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="24" fill="url(#grad1)" />
+  
+  <!-- Stylized factory or database layers -->
+  <path d="M 25 65 L 25 45 L 35 35 L 45 45 L 45 30 L 55 20 L 75 40 L 75 65 Z" fill="#ffffff" opacity="0.9"/>
+  
+  <!-- Window cutouts -->
+  <rect x="30" y="50" width="10" height="8" rx="2" fill="#3e889d" />
+  <rect x="50" y="45" width="10" height="8" rx="2" fill="#3e889d" />
+  <rect x="50" y="58" width="10" height="8" rx="2" fill="#3e889d" />
+  <rect x="65" y="50" width="10" height="8" rx="2" fill="#3e889d" />
+  
+  <!-- Connection node representing data/execution -->
+  <circle cx="55" cy="20" r="4" fill="#82c0d1" />
+  <path d="M 55 20 C 65 10, 80 15, 85 25" fill="none" stroke="#82c0d1" stroke-width="3" stroke-dasharray="2 2" stroke-linecap="round" />
+  <circle cx="85" cy="25" r="3" fill="#82c0d1" />
+</svg>

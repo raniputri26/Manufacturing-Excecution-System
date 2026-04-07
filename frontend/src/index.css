@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+    --color-marine-50: #f0f7f9;
+    --color-marine-100: #d8ecf1;
+    --color-marine-200: #b4dae3;
+    --color-marine-300: #82c0d1;
+    --color-marine-400: #54a0b7;
+    --color-marine-500: #3e889d;
+    /* Marine Miracle base */
+    --color-marine-600: #346e81;
+    --color-marine-700: #2d5a6c;
+    --color-marine-800: #284a59;
+    --color-marine-900: #243e4b;
+    --color-marine-950: #142732;
+
+    --animate-slide-up-fade: slideUpFade 0.4s ease-out forwards;
+    --animate-slide-down-fade: slideDownFade 0.4s ease-out forwards;
+
+    @keyframes slideUpFade {
+        0% {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes slideDownFade {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Base body styles to handle the background transition */
+@layer base {
+    body {
+        @apply bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100;
+        color-scheme: light dark;
+    }
+
+    /* Apply smooth color transitions globally for dark mode toggle */
+    *,
+    ::before,
+    ::after {
+        @apply transition-colors duration-300;
+    }
+}
+
+@layer utilities {
+
+    ::-webkit-scrollbar,
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+        background-color: transparent;
+    }
+
+    ::-webkit-scrollbar-track,
+    .custom-scrollbar::-webkit-scrollbar-track {
+        @apply bg-transparent;
+    }
+
+    ::-webkit-scrollbar-thumb,
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        @apply bg-slate-200 border-[2px] border-slate-50 dark:border-slate-950 rounded-full dark:bg-slate-800 bg-clip-padding;
+    }
+
+    ::-webkit-scrollbar-thumb:hover,
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        @apply bg-slate-300 dark:bg-slate-700;
+    }
+}
