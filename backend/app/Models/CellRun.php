@@ -6,7 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class CellRun extends Model
 {
-    protected $fillable = ['location_id', 'shoe_model_id', 'status'];
+    protected $fillable = ['location_id', 'shoe_model_id', 'status', 'active_sections'];
+
+    protected $casts = [
+        'active_sections' => 'array',
+    ];
 
     public function location()
     {

@@ -6,12 +6,22 @@ function Dashboard() {
     const [cellRuns, setCellRuns] = useState([]);
     const [locations, setLocations] = useState([]);
     const [shoeModels, setShoeModels] = useState([]);
+    const [sections, setSections] = useState([]);
     const [selectedCell, setSelectedCell] = useState(null);
     const [history, setHistory] = useState([]);
+    
+    // Assign Modal
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [assignTarget, setAssignTarget] = useState(null);
     const [assignModelId, setAssignModelId] = useState('');
+    const [assignActiveSections, setAssignActiveSections] = useState([]);
     const [loadingAssign, setLoadingAssign] = useState(false);
+    
+    // Stop Section Modal
+    const [stopModalTarget, setStopModalTarget] = useState(null);
+    const [stopSelectedSections, setStopSelectedSections] = useState([]);
+    const [loadingStop, setLoadingStop] = useState(false);
+
     const [bomPage, setBomPage] = useState(1);
     const BOM_PER_PAGE = 20;
     const [showHistory, setShowHistory] = useState(false);
@@ -44,6 +54,7 @@ function Dashboard() {
         api.get('/locations').then(res => setLocations(res.data.filter(l => l.type === 'Cell'))).catch(console.error);
         api.get('/locations/holding-inventory').then(res => setHoldingInventory(res.data)).catch(console.error);
         api.get('/shoe-models').then(res => setShoeModels(res.data)).catch(console.error);
+        api.get('/sections').then(res => setSections(res.data)).catch(console.error);
 
         if (selectedCellIdRef.current) {
             const currentCell = locations.find(l => l.id === selectedCellIdRef.current) || selectedCell;
@@ -88,6 +99,7 @@ function Dashboard() {
     const openAssignModal = (loc) => {
         setAssignTarget(loc);
         setAssignModelId('');
+        setAssignActiveSections([]);
         setShowAssignModal(true);
     };
 
@@ -98,6 +110,7 @@ function Dashboard() {
             await api.post('/cell-runs/assign', {
                 location_id: assignTarget.id,
                 shoe_model_id: Number(assignModelId),
+                active_sections: assignActiveSections.length > 0 ? assignActiveSections : null
             });
             fetchAll();
             setShowAssignModal(false);
@@ -111,16 +124,29 @@ function Dashboard() {
         }
     };
 
-    const handleStopCell = async (cellRunId) => {
-        if (!confirm('Stop this model run?')) return;
+    const openStopModal = (run) => {
+        setStopModalTarget(run);
+        setStopSelectedSections(run.active_sections || []);
+        setLoadingStop(false);
+    };
+
+    const handleStopSectionSubmit = async () => {
+        if (!stopModalTarget) return;
+        setLoadingStop(true);
         try {
-            await api.post('/cell-runs/stop', { cell_run_id: cellRunId });
+            await api.post('/cell-runs/stop-section', {
+                cell_run_id: stopModalTarget.id,
+                section_ids: stopSelectedSections
+            });
             fetchAll();
+            setStopModalTarget(null);
             if (selectedCell) {
                 handleSelectCell(selectedCell);
             }
         } catch (err) {
             alert('Error: ' + (err.response?.data?.message || 'Failed'));
+        } finally {
+            setLoadingStop(false);
         }
     };
 
@@ -599,9 +625,9 @@ function Dashboard() {
                                             >
                                                 <span className="truncate max-w-[120px]">{r.shoe_model?.name || 'Model'}</span>
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); handleStopCell(r.id); }}
+                                                    onClick={(e) => { e.stopPropagation(); openStopModal(r); }}
                                                     className="text-red-400 hover:text-red-600 dark:hover:text-red-300 transition bg-transparent border-none cursor-pointer p-0 ml-1"
-                                                    title="Stop this model"
+                                                    title="Stop this model or specific sections"
                                                 >
                                                     <Square className="w-3 h-3" />
                                                 </button>
@@ -611,12 +637,17 @@ function Dashboard() {
                                 )}
 
                                 {/* BOM Requirements for selected model */}
-                                {activeRun && activeRun.shoe_model?.requirements && activeRun.shoe_model.requirements.length > 0 && (
+                                {activeRun && activeRun.shoe_model?.requirements && activeRun.shoe_model.requirements.length > 0 && (() => {
+                                    const visibleRequirements = activeRun.shoe_model.requirements.filter(req => 
+                                        !activeRun.active_sections || activeRun.active_sections.length === 0 || activeRun.active_sections.includes(req.section_id)
+                                    );
+                                    
+                                    return (
                                     <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 rounded-xl rounded-tl-none border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-colors duration-300 min-h-0 -mt-1">
                                         <div className="px-5 py-3 border-b border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/5 flex items-center justify-between">
                                             <div className="flex items-center gap-3">
                                                 <h3 className="font-bold text-sm text-slate-700 dark:text-slate-300 uppercase tracking-wider">BOM Requirements</h3>
-                                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">{activeRun.shoe_model.requirements.length} items</span>
+                                                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold">{visibleRequirements.length} items</span>
                                             </div>
                                             <button
                                                 onClick={() => setShowHistory(!showHistory)}
@@ -646,7 +677,7 @@ function Dashboard() {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                                                    {activeRun.shoe_model.requirements.slice((bomPage - 1) * BOM_PER_PAGE, bomPage * BOM_PER_PAGE).map((req, idx) => {
+                                                    {visibleRequirements.slice((bomPage - 1) * BOM_PER_PAGE, bomPage * BOM_PER_PAGE).map((req, idx) => {
                                                         const sectionColors = [
                                                             { keyword: 'cutting', bg: 'bg-sky-50 dark:bg-sky-500/10', text: 'text-sky-700 dark:text-sky-400', border: 'border-sky-200 dark:border-sky-500/20', dot: 'bg-sky-500' },
                                                             { keyword: 'stitching', bg: 'bg-violet-50 dark:bg-violet-500/10', text: 'text-violet-700 dark:text-violet-400', border: 'border-violet-200 dark:border-violet-500/20', dot: 'bg-violet-500' },
@@ -721,8 +752,8 @@ function Dashboard() {
                                                 </tbody>
                                             </table>
                                         </div>
-                                        {activeRun.shoe_model.requirements.length > BOM_PER_PAGE && (() => {
-                                            const totalPages = Math.ceil(activeRun.shoe_model.requirements.length / BOM_PER_PAGE);
+                                        {visibleRequirements.length > BOM_PER_PAGE && (() => {
+                                            const totalPages = Math.ceil(visibleRequirements.length / BOM_PER_PAGE);
                                             return (
                                                 <div className="flex items-center justify-between px-5 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-white/[0.02]">
                                                     <button
@@ -746,7 +777,7 @@ function Dashboard() {
                                             );
                                         })()}
                                     </div>
-                                )}
+                                );})()}
 
                                 {/* Run History Popup */}
                                 {showHistory && (
@@ -807,26 +838,58 @@ function Dashboard() {
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <div className="p-6">
+                        <div className="p-6 pb-2">
                             {getCellRuns(assignTarget?.id).length > 0 && (
                                 <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/30 rounded-xl text-sm text-blue-700 dark:text-blue-400 transition-colors">
                                     ℹ️ This cell already has <strong>{getCellRuns(assignTarget?.id).length} model{getCellRuns(assignTarget?.id).length > 1 ? 's' : ''}</strong> running.
                                     The new model will run <strong>concurrently</strong> alongside existing ones.
                                 </div>
                             )}
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Select Shoe Model</label>
-                            <select
-                                value={assignModelId}
-                                onChange={(e) => setAssignModelId(e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-marine-500 focus:border-marine-500 outline-none transition text-slate-700 dark:text-slate-300 font-medium"
-                            >
-                                <option value="">-- Choose a model --</option>
-                                {shoeModels.map(m => (
-                                    <option key={m.id} value={m.id}>{m.name} ({m.code})</option>
-                                ))}
-                            </select>
+                            <div className="mb-4">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Select Shoe Model</label>
+                                <select
+                                    value={assignModelId}
+                                    onChange={(e) => setAssignModelId(e.target.value)}
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-marine-500 focus:border-marine-500 outline-none transition text-slate-700 dark:text-slate-300 font-medium"
+                                >
+                                    <option value="">-- Choose a model --</option>
+                                    {shoeModels.map(m => (
+                                        <option key={m.id} value={m.id}>{m.name} ({m.code})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {assignModelId && (
+                                <div className="mb-2">
+                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                                        Select Active Sections
+                                        <span className="block text-xs font-normal text-slate-400 mt-0.5">By default, all sections will be activated. Check only the ones you want to run.</span>
+                                    </label>
+                                    <div className="space-y-2 max-h-[160px] overflow-y-auto px-1">
+                                        {sections.map(sec => (
+                                            <label key={sec.id} className="flex items-center p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer border border-transparent hover:border-slate-100 dark:hover:border-slate-700 transition">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={assignActiveSections.length === 0 || assignActiveSections.includes(sec.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            if (assignActiveSections.length === 0) return; // All were selected
+                                                            setAssignActiveSections([...assignActiveSections, sec.id]);
+                                                        } else {
+                                                            let current = assignActiveSections.length === 0 ? sections.map(s => s.id) : assignActiveSections;
+                                                            setAssignActiveSections(current.filter(id => id !== sec.id));
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 rounded border-slate-300 text-marine-600 focus:ring-marine-600 dark:border-slate-600 dark:bg-slate-700 cursor-pointer mr-3"
+                                                />
+                                                <span className="text-sm text-slate-700 dark:text-slate-300 font-medium">{sec.name}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        <div className="p-6 pt-0 flex gap-3 justify-end">
+                        <div className="p-6 pt-2 flex gap-3 justify-end">
                             <button
                                 onClick={() => setShowAssignModal(false)}
                                 className="px-5 py-2.5 rounded-xl font-bold text-sm bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer border-none"
@@ -840,6 +903,66 @@ function Dashboard() {
                             >
                                 {loadingAssign ? 'Assigning...' : 'Assign & Start'}
                                 <Play className="w-3 h-3" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Stop Section Modal */}
+            {stopModalTarget && (
+                <div className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden dark:border dark:border-slate-800" style={{ animation: 'fadeIn 0.2s ease-out' }}>
+                        <div className="p-6 border-b border-slate-100 dark:border-white/10 flex justify-between items-center transition-colors bg-red-50 dark:bg-red-900/20">
+                            <div>
+                                <h3 className="text-lg font-bold text-red-600 dark:text-red-400">Stop Sections</h3>
+                                <p className="text-sm text-red-500/80 dark:text-red-400/80">{stopModalTarget.shoe_model?.name}</p>
+                            </div>
+                            <button onClick={() => setStopModalTarget(null)} className="text-red-400 hover:text-red-600 dark:text-red-500 dark:hover:text-red-300 transition cursor-pointer bg-transparent border-none">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6 pb-2">
+                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                Select which section(s) to STOP. <br/>
+                                <strong className="text-red-500">Warning:</strong> Stopping ALL active sections will mark the entire model run as completed!
+                            </p>
+                            <div className="space-y-2">
+                                {sections.filter(s => (stopModalTarget.active_sections || []).includes(s.id)).map(sec => (
+                                    <label key={sec.id} className="flex items-center p-3 rounded-xl bg-slate-50 hover:bg-red-50 dark:bg-slate-800 dark:hover:bg-red-900/20 cursor-pointer border border-slate-200 dark:border-slate-700 transition">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={stopSelectedSections.includes(sec.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) setStopSelectedSections([...stopSelectedSections, sec.id]);
+                                                else setStopSelectedSections(stopSelectedSections.filter(id => id !== sec.id));
+                                            }}
+                                            className="w-5 h-5 rounded border-slate-300 text-red-500 focus:ring-red-500 dark:border-slate-600 dark:bg-slate-700 cursor-pointer mr-3"
+                                        />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 font-semibold">{sec.name}</span>
+                                    </label>
+                                ))}
+                                {(stopModalTarget.active_sections || []).length === 0 && (
+                                    <p className="text-sm text-slate-500 italic">No sections are specifically tracked for this run.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="p-6 flex flex-col gap-2">
+                            <button
+                                onClick={handleStopSectionSubmit}
+                                disabled={loadingStop || stopSelectedSections.length === 0}
+                                className={`w-full py-3 rounded-xl font-bold text-sm transition flex justify-center items-center gap-2 cursor-pointer border-none ${(loadingStop || stopSelectedSections.length === 0) ? 'bg-red-200 dark:bg-red-900/40 text-white cursor-not-allowed' : 'bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-500/20'}`}
+                            >
+                                <Square className="w-4 h-4"/> 
+                                {loadingStop ? 'Stopping...' : stopSelectedSections.length === (stopModalTarget.active_sections || []).length ? 'STOP ALL (Complete Run)' : 'Stop Selected Sections'}
+                            </button>
+                            <button
+                                onClick={() => setStopModalTarget(null)}
+                                className="w-full py-2.5 rounded-xl font-bold text-sm bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer border-none mt-1"
+                            >
+                                Cancel
                             </button>
                         </div>
                     </div>

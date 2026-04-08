@@ -25,6 +25,7 @@ Route::apiResource('model-requirements', ModelRequirementController::class);
 Route::post('import-model-requirements', [ModelRequirementController::class, 'importExcel']);
 Route::post('cell-runs/assign', [CellRunController::class, 'assignCell']);
 Route::post('cell-runs/stop', [CellRunController::class, 'stopCell']);
+Route::post('cell-runs/stop-section', [CellRunController::class, 'stopSection']);
 Route::get('cell-runs/history/{locationId}', [CellRunController::class, 'getHistory']);
 Route::apiResource('cell-runs', CellRunController::class);
 Route::get('cell-monitor/{locationId}', [CellRunController::class, 'getMonitorData']);

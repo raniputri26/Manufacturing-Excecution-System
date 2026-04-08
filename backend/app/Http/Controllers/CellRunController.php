@@ -64,32 +64,41 @@ class CellRunController extends Controller
         $validated = $request->validate([
             'location_id' => 'required|exists:locations,id',
             'shoe_model_id' => 'required|exists:shoe_models,id',
+            'active_sections' => 'nullable|array',
+            'active_sections.*' => 'numeric'
         ]);
+
+        $shoeModel = \App\Models\ShoeModel::with('requirements')->find($validated['shoe_model_id']);
+        $activeSections = $validated['active_sections'] ?? [];
+
+        if (empty($activeSections)) {
+            // Default to all unique sections linked to this model's requirements
+            $activeSections = $shoeModel->requirements->pluck('section_id')->unique()->filter()->values()->toArray();
+        }
 
         // Create new running cell run (does NOT stop existing runs)
         $cellRun = CellRun::create([
             'location_id' => $validated['location_id'],
             'shoe_model_id' => $validated['shoe_model_id'],
             'status' => 'running',
+            'active_sections' => $activeSections
         ]);
 
         $cellRun->load('shoeModel.requirements');
 
-        // Load all physical machines currently in this cell
-        $machinesInCell = \App\Models\Machine::where('location_id', $validated['location_id'])->get();
-
-        // Calculate actual qty based on physical machines
+        // Initialize actual qty based on standard requirements ONLY for active sections
         foreach ($cellRun->shoeModel->requirements as $req) {
-            $matchedCount = $machinesInCell->filter(function($m) use ($req) {
-                // Strip serial number suffix to match requirement base name
-                $mName = preg_replace('/\s*#\d+$/', '', $m->name);
-                return stripos($mName, $req->machine_name) !== false || stripos($req->machine_name, $mName) !== false;
-            })->count();
+            $initialCount = 0;
+            
+            if (in_array($req->section_id, $activeSections)) {
+                // Set initial actual equal to standard as requested by user
+                $initialCount = $req->qty_required;
+            }
 
             RequirementActual::create([
                 'cell_run_id' => $cellRun->id,
                 'model_requirement_id' => $req->id,
-                'qty_actual' => $matchedCount,
+                'qty_actual' => $initialCount,
             ]);
         }
 
@@ -106,9 +115,44 @@ class CellRunController extends Controller
         ]);
 
         $cellRun = CellRun::findOrFail($validated['cell_run_id']);
-        $cellRun->update(['status' => 'completed']);
+        $cellRun->update([
+            'status' => 'completed',
+            'active_sections' => []
+        ]);
 
         return response()->json(['message' => 'Model run stopped.']);
+    }
+
+    /**
+     * Stop specific sections within a running model
+     */
+    public function stopSection(Request $request)
+    {
+        $validated = $request->validate([
+            'cell_run_id' => 'required|exists:cell_runs,id',
+            'section_ids' => 'required|array',
+            'section_ids.*' => 'numeric'
+        ]);
+
+        $cellRun = CellRun::findOrFail($validated['cell_run_id']);
+        $activeSections = $cellRun->active_sections ?? [];
+
+        // Remove the stopped sections from the active array
+        $activeSections = array_values(array_diff($activeSections, $validated['section_ids']));
+
+        // If no sections are left active, mark the whole run as completed
+        if (empty($activeSections)) {
+            $cellRun->update([
+                'status' => 'completed',
+                'active_sections' => []
+            ]);
+        } else {
+            $cellRun->update([
+                'active_sections' => $activeSections
+            ]);
+        }
+
+        return response()->json($cellRun->load(['location', 'shoeModel']), 200);
     }
 
     /**

@@ -103,19 +103,24 @@ class MachineLocationController extends Controller
                 ->get();
                 
             foreach ($cellRuns as $run) {
+                $activeSections = $run->active_sections ?? [];
+                
                 foreach ($run->shoeModel->requirements as $req) {
-                    if (stripos($machineName, $req->machine_name) !== false || stripos($req->machine_name, $machineName) !== false) {
-                        $actual = RequirementActual::where('cell_run_id', $run->id)
-                            ->where('model_requirement_id', $req->id)->first();
-                            
-                        if ($actual) {
-                            $actual->update(['qty_actual' => max(0, $actual->qty_actual + $amount)]);
-                        } else {
-                            RequirementActual::create([
-                                'cell_run_id' => $run->id,
-                                'model_requirement_id' => $req->id,
-                                'qty_actual' => max(0, $req->qty_required + $amount),
-                            ]);
+                    // Only update actuals if this requirement belongs to an active section
+                    if (in_array($req->section_id, $activeSections)) {
+                        if (stripos($machineName, $req->machine_name) !== false || stripos($req->machine_name, $machineName) !== false) {
+                            $actual = RequirementActual::where('cell_run_id', $run->id)
+                                ->where('model_requirement_id', $req->id)->first();
+                                
+                            if ($actual) {
+                                $actual->update(['qty_actual' => max(0, $actual->qty_actual + $amount)]);
+                            } else {
+                                RequirementActual::create([
+                                    'cell_run_id' => $run->id,
+                                    'model_requirement_id' => $req->id,
+                                    'qty_actual' => max(0, $req->qty_required + $amount),
+                                ]);
+                            }
                         }
                     }
                 }
